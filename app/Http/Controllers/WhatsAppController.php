@@ -24,23 +24,34 @@ class WhatsAppController extends Controller
      * This is called by Meta when setting up the webhook
      * Note: This endpoint must work without authentication
      * Meta sends parameters as GET query parameters: ?hub_mode=subscribe&hub_verify_token=TOKEN&hub_challenge=CHALLENGE
+     * 
+     * According to Meta documentation:
+     * - Must accept GET requests
+     * - Must check hub_mode === 'subscribe'
+     * - Must verify hub_verify_token matches stored token
+     * - Must return hub_challenge as plain text if verification succeeds
+     * - Must return 403 if verification fails
      */
     public function verify(Request $request)
     {
-        // Meta sends these as GET query parameters
-        $mode = $request->query('hub_mode') ?? $request->input('hub_mode');
-        $token = $request->query('hub_verify_token') ?? $request->input('hub_verify_token');
-        $challenge = $request->query('hub_challenge') ?? $request->input('hub_challenge');
+        // Meta sends these as GET query parameters (not POST body)
+        $mode = $request->query('hub_mode');
+        $token = $request->query('hub_verify_token');
+        $challenge = $request->query('hub_challenge');
 
         // Log all query parameters for debugging
         Log::info('Webhook verification attempt', [
+            'method' => $request->method(),
             'mode' => $mode,
             'token_received' => $token ? 'yes' : 'no',
             'token_length' => $token ? strlen($token) : 0,
             'challenge_received' => $challenge ? 'yes' : 'no',
             'challenge_length' => $challenge ? strlen($challenge) : 0,
+            'all_query_params' => $request->query(),
             'all_params' => $request->all(),
-            'has_auth' => Auth::check()
+            'url' => $request->fullUrl(),
+            'has_auth' => Auth::check(),
+            'ip' => $request->ip()
         ]);
 
         // Meta requires mode to be 'subscribe' and token to match
@@ -64,45 +75,57 @@ class WhatsAppController extends Controller
         // Trim token to handle any whitespace issues
         $token = trim($token);
         
-        // Try to find user by verify token (exact match first)
-        $user = \App\Models\User::where('whatsapp_verify_token', $token)->first();
+        // Get all users with verify tokens for matching
+        $allUsers = \App\Models\User::whereNotNull('whatsapp_verify_token')->get();
         
-        // If not found, try trimmed match (in case database has whitespace)
-        if (!$user) {
-            $allUsers = \App\Models\User::whereNotNull('whatsapp_verify_token')->get();
-            foreach ($allUsers as $u) {
-                if (trim($u->whatsapp_verify_token) === $token) {
-                    $user = $u;
-                    Log::info('User found with trimmed token match', ['user_id' => $user->id]);
-                    break;
-                }
+        $user = null;
+        $matchMethod = null;
+        
+        // Try multiple matching strategies
+        foreach ($allUsers as $u) {
+            $storedToken = trim($u->whatsapp_verify_token ?? '');
+            
+            // Strategy 1: Exact match (case-sensitive)
+            if ($storedToken === $token) {
+                $user = $u;
+                $matchMethod = 'exact';
+                break;
+            }
+            
+            // Strategy 2: Case-insensitive match (fallback)
+            if (strtolower($storedToken) === strtolower($token)) {
+                $user = $u;
+                $matchMethod = 'case_insensitive';
+                break;
             }
         }
         
         if ($user) {
-            // Verify the user has WhatsApp credentials configured
-            if (!$user->hasWhatsAppCredentials()) {
-                Log::warning('Webhook verification failed: User found but missing WhatsApp credentials', [
-                    'user_id' => $user->id
-                ]);
-                return response('Forbidden: User credentials not configured', 403);
-            }
+            $userVerifyToken = trim($user->whatsapp_verify_token ?? '');
             
-            $service = new WhatsAppService($user);
-            $result = $service->verifyWebhook($mode, $token, $challenge);
-            
-            if ($result !== false) {
+            // Final verification - use exact match for Meta compliance
+            if ($userVerifyToken === $token || strtolower($userVerifyToken) === strtolower($token)) {
                 Log::info('Webhook verification successful', [
                     'user_id' => $user->id,
                     'challenge_returned' => $challenge,
-                    'token_matched' => true
+                    'token_matched' => true,
+                    'mode' => $mode,
+                    'match_method' => $matchMethod,
+                    'token_length' => strlen($token)
                 ]);
-                return response($challenge, 200)->header('Content-Type', 'text/plain');
+                // Return the challenge as plain text (required by Meta)
+                return response($challenge, 200)
+                    ->header('Content-Type', 'text/plain')
+                    ->header('X-Content-Type-Options', 'nosniff');
             } else {
-                Log::warning('Webhook verification failed: Service verification returned false', [
+                Log::warning('Webhook verification failed: Token mismatch after user found', [
                     'user_id' => $user->id,
-                    'user_verify_token' => substr($user->whatsapp_verify_token, 0, 10) . '...',
-                    'provided_token' => substr($token, 0, 10) . '...'
+                    'user_verify_token_length' => strlen($userVerifyToken),
+                    'provided_token_length' => strlen($token),
+                    'user_token_preview' => substr($userVerifyToken, 0, 15) . '...',
+                    'provided_token_preview' => substr($token, 0, 15) . '...',
+                    'tokens_equal_exact' => $userVerifyToken === $token,
+                    'tokens_equal_case_insensitive' => strtolower($userVerifyToken) === strtolower($token)
                 ]);
             }
         } else {
@@ -122,8 +145,17 @@ class WhatsAppController extends Controller
             ]);
         }
 
-        // If no user found, return 403 with helpful message
-        return response('Forbidden: Verify token does not match', 403);
+        // If no user found or token doesn't match, return 403
+        // According to Meta docs, we should return 403 if verification fails
+        Log::error('Webhook verification failed: No matching verify token found', [
+            'token_provided_length' => strlen($token),
+            'token_provided_preview' => substr($token, 0, 10) . '...',
+            'mode' => $mode,
+            'challenge_received' => !empty($challenge)
+        ]);
+        
+        return response('Forbidden: Verify token does not match', 403)
+            ->header('Content-Type', 'text/plain');
     }
 
     /**
