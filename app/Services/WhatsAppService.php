@@ -16,14 +16,14 @@ class WhatsAppService
     public function __construct($user = null)
     {
         if ($user && $user->hasWhatsAppCredentials()) {
-            // Use user-specific credentials - Default to Cloud API v21.0
-            $this->apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0';
+            // Use user-specific credentials - Default to Cloud API v24.0 (latest)
+            $this->apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v24.0';
             $this->phoneNumberId = $user->whatsapp_phone_number_id;
             $this->accessToken = $user->whatsapp_access_token;
             $this->verifyToken = $user->whatsapp_verify_token;
         } else {
-            // Fallback to config (for backward compatibility) - Default to Cloud API v21.0
-            $this->apiUrl = config('services.whatsapp.api_url', 'https://graph.facebook.com/v21.0');
+            // Fallback to config (for backward compatibility) - Default to Cloud API v24.0 (latest)
+            $this->apiUrl = config('services.whatsapp.api_url', 'https://graph.facebook.com/v24.0');
             $this->phoneNumberId = config('services.whatsapp.phone_number_id');
             $this->accessToken = config('services.whatsapp.access_token');
             $this->verifyToken = config('services.whatsapp.verify_token');
@@ -69,17 +69,23 @@ class WhatsAppService
                 'phone_number_id' => $this->phoneNumberId
             ]);
 
-            $response = Http::withToken($this->accessToken)
-                ->post("{$this->apiUrl}/{$this->phoneNumberId}/messages", [
-                    'messaging_product' => 'whatsapp',
-                    'recipient_type' => 'individual',
-                    'to' => $normalizedTo,
-                    'type' => 'text',
-                    'text' => [
-                        'preview_url' => false,
-                        'body' => $message
-                    ]
-                ]);
+            // According to WhatsApp Cloud API v24.0 documentation:
+            // Endpoint: POST https://graph.facebook.com/v24.0/{phone-number-id}/messages
+            // Headers: Authorization: Bearer {access-token}, Content-Type: application/json
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$this->accessToken}",
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ])->post("{$this->apiUrl}/{$this->phoneNumberId}/messages", [
+                'messaging_product' => 'whatsapp',
+                'recipient_type' => 'individual',
+                'to' => $normalizedTo,
+                'type' => 'text',
+                'text' => [
+                    'preview_url' => false,
+                    'body' => $message
+                ]
+            ]);
 
             if ($response->successful()) {
                 $responseData = $response->json();
@@ -311,8 +317,12 @@ class WhatsAppService
                 $payload[$type]['caption'] = $caption;
             }
 
-            $response = Http::withToken($this->accessToken)
-                ->post("{$this->apiUrl}/{$this->phoneNumberId}/messages", $payload);
+            // According to WhatsApp Cloud API v24.0 documentation
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$this->accessToken}",
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ])->post("{$this->apiUrl}/{$this->phoneNumberId}/messages", $payload);
 
             if ($response->successful()) {
                 $messageId = $response->json('messages.0.id');
@@ -440,8 +450,12 @@ class WhatsAppService
                 ];
             }
 
-            $response = Http::withToken($this->accessToken)
-                ->post("{$this->apiUrl}/{$this->phoneNumberId}/messages", $payload);
+            // According to WhatsApp Cloud API v24.0 documentation
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$this->accessToken}",
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ])->post("{$this->apiUrl}/{$this->phoneNumberId}/messages", $payload);
 
             if ($response->successful()) {
                 $messageId = $response->json('messages.0.id');
@@ -583,50 +597,105 @@ class WhatsAppService
     public function processStatusUpdate(array $data): array
     {
         try {
+            // Validate webhook structure
+            if (!isset($data['entry']) || !is_array($data['entry']) || empty($data['entry'])) {
+                Log::warning('Invalid webhook structure: missing entry', ['data_keys' => array_keys($data)]);
+                return ['success' => false, 'message' => 'Invalid webhook structure: missing entry'];
+            }
+
+            if (!isset($data['entry'][0]['changes']) || !is_array($data['entry'][0]['changes']) || empty($data['entry'][0]['changes'])) {
+                Log::warning('Invalid webhook structure: missing changes', ['entry' => $data['entry'][0] ?? null]);
+                return ['success' => false, 'message' => 'Invalid webhook structure: missing changes'];
+            }
+
             if (!isset($data['entry'][0]['changes'][0]['value']['statuses'])) {
+                Log::debug('No status updates in webhook data', [
+                    'has_value' => isset($data['entry'][0]['changes'][0]['value']),
+                    'value_keys' => isset($data['entry'][0]['changes'][0]['value']) ? array_keys($data['entry'][0]['changes'][0]['value']) : []
+                ]);
                 return ['success' => false, 'message' => 'No status updates in webhook data'];
             }
 
             $statuses = $data['entry'][0]['changes'][0]['value']['statuses'];
+            if (!is_array($statuses) || empty($statuses)) {
+                Log::warning('Statuses is not an array or is empty', ['statuses' => $statuses]);
+                return ['success' => false, 'message' => 'Statuses array is empty'];
+            }
+
             $processed = [];
+            $errors = [];
 
-            foreach ($statuses as $status) {
-                $messageId = $status['id'] ?? null;
-                if (!$messageId) {
-                    Log::warning('Status update received without message ID', ['status' => $status]);
-                    continue;
-                }
-
-                $statusValue = $status['status'] ?? null; // sent, delivered, read, failed
-                if (!$statusValue) {
-                    Log::warning('Status update received without status value', ['message_id' => $messageId]);
-                    continue;
-                }
-
-                $timestamp = $status['timestamp'] ?? time();
-                $recipientId = $status['recipient_id'] ?? null;
-
-                // Find message by message_id (try exact match first)
-                $message = Message::where('message_id', $messageId)->first();
-
-                // If not found, try to find by recipient phone number and recent timestamp
-                if (!$message && $recipientId) {
-                    $normalizedRecipient = preg_replace('/[^0-9]/', '', $recipientId);
-                    $message = Message::where('phone_number', $normalizedRecipient)
-                        ->where('direction', 'sent')
-                        ->whereNull('delivered_at')
-                        ->orderBy('created_at', 'desc')
-                        ->first();
-                    
-                    if ($message) {
-                        // Update message_id if it was missing
-                        $message->update(['message_id' => $messageId]);
-                        Log::info('Message ID updated from status webhook', [
-                            'message_id' => $messageId,
-                            'phone_number' => $normalizedRecipient
+            foreach ($statuses as $index => $status) {
+                try {
+                    $messageId = $status['id'] ?? null;
+                    if (!$messageId) {
+                        Log::warning('Status update received without message ID', [
+                            'status_index' => $index,
+                            'status' => $status
                         ]);
+                        $errors[] = "Status update #{$index} missing message ID";
+                        continue;
                     }
-                }
+
+                    $statusValue = $status['status'] ?? null; // sent, delivered, read, failed
+                    if (!$statusValue) {
+                        Log::warning('Status update received without status value', [
+                            'message_id' => $messageId,
+                            'status' => $status
+                        ]);
+                        $errors[] = "Status update for {$messageId} missing status value";
+                        continue;
+                    }
+
+                    $timestamp = $status['timestamp'] ?? time();
+                    $recipientId = $status['recipient_id'] ?? null;
+
+                    Log::info('Processing status update', [
+                        'message_id' => $messageId,
+                        'status' => $statusValue,
+                        'recipient_id' => $recipientId,
+                        'timestamp' => $timestamp
+                    ]);
+
+                    // Find message by message_id (try exact match first)
+                    $message = Message::where('message_id', $messageId)->first();
+
+                    // If not found, try multiple fallback methods
+                    if (!$message && $recipientId) {
+                        $normalizedRecipient = preg_replace('/[^0-9]/', '', $recipientId);
+                        
+                        // Method 1: Find by recipient phone number and recent timestamp (within last 24 hours)
+                        $message = Message::where('phone_number', $normalizedRecipient)
+                            ->where('direction', 'sent')
+                            ->where('created_at', '>=', now()->subHours(24))
+                            ->where(function($query) {
+                                $query->whereNull('delivered_at')
+                                      ->orWhereNull('message_id');
+                            })
+                            ->orderBy('created_at', 'desc')
+                            ->first();
+                        
+                        // Method 2: If still not found, try without delivered_at filter
+                        if (!$message) {
+                            $message = Message::where('phone_number', $normalizedRecipient)
+                                ->where('direction', 'sent')
+                                ->where('created_at', '>=', now()->subHours(48))
+                                ->orderBy('created_at', 'desc')
+                                ->first();
+                        }
+                        
+                        if ($message) {
+                            // Update message_id if it was missing
+                            if (!$message->message_id) {
+                                $message->update(['message_id' => $messageId]);
+                                Log::info('Message ID updated from status webhook', [
+                                    'message_id' => $messageId,
+                                    'phone_number' => $normalizedRecipient,
+                                    'message_db_id' => $message->id
+                                ]);
+                            }
+                        }
+                    }
 
                 if ($message) {
                     $updateData = [];
@@ -691,22 +760,55 @@ class WhatsAppService
                         ]);
                     }
                 } else {
+                    // Log detailed information for debugging
+                    $recentMessages = Message::where('direction', 'sent')
+                        ->where('created_at', '>=', now()->subHours(24))
+                        ->orderBy('created_at', 'desc')
+                        ->limit(10)
+                        ->get(['id', 'message_id', 'phone_number', 'status', 'created_at', 'user_id'])
+                        ->toArray();
+                    
                     Log::warning('Status update received for unknown message', [
                         'message_id' => $messageId,
                         'status' => $statusValue,
                         'recipient_id' => $recipientId,
+                        'normalized_recipient' => $recipientId ? preg_replace('/[^0-9]/', '', $recipientId) : null,
                         'full_status' => $status,
-                        'available_messages' => Message::where('direction', 'sent')
-                            ->whereNull('delivered_at')
-                            ->orderBy('created_at', 'desc')
-                            ->limit(5)
-                            ->pluck('message_id', 'phone_number')
-                            ->toArray()
+                        'recent_sent_messages' => $recentMessages,
+                        'total_recent_messages' => count($recentMessages)
                     ]);
+                    
+                    $errors[] = "Status update for message {$messageId} (status: {$statusValue}) - message not found in database";
+                }
+                } catch (\Exception $e) {
+                    Log::error('Error processing individual status update', [
+                        'status_index' => $index,
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                        'status' => $status
+                    ]);
+                    $errors[] = "Error processing status update #{$index}: " . $e->getMessage();
                 }
             }
 
-            return ['success' => true, 'processed' => $processed];
+            $result = [
+                'success' => count($processed) > 0 || empty($errors),
+                'processed' => $processed,
+                'processed_count' => count($processed)
+            ];
+            
+            if (!empty($errors)) {
+                $result['errors'] = $errors;
+                $result['error_count'] = count($errors);
+            }
+            
+            Log::info('Status update processing completed', [
+                'processed_count' => count($processed),
+                'error_count' => count($errors),
+                'processed' => $processed
+            ]);
+
+            return $result;
         } catch (\Exception $e) {
             Log::error('WhatsApp status update processing exception', [
                 'message' => $e->getMessage(),
@@ -728,18 +830,42 @@ class WhatsAppService
     public function processWebhook(array $data, ?int $userId = null): array
     {
         try {
+            // Validate webhook structure
+            if (!isset($data['entry']) || !is_array($data['entry']) || empty($data['entry'])) {
+                Log::warning('Invalid webhook structure: missing entry', ['data_keys' => array_keys($data)]);
+                return ['success' => false, 'message' => 'Invalid webhook structure: missing entry'];
+            }
+
+            if (!isset($data['entry'][0]['changes']) || !is_array($data['entry'][0]['changes']) || empty($data['entry'][0]['changes'])) {
+                Log::warning('Invalid webhook structure: missing changes', ['entry' => $data['entry'][0] ?? null]);
+                return ['success' => false, 'message' => 'Invalid webhook structure: missing changes'];
+            }
+
+            $value = $data['entry'][0]['changes'][0]['value'] ?? null;
+            if (!$value) {
+                Log::warning('Invalid webhook structure: missing value', ['changes' => $data['entry'][0]['changes'][0] ?? null]);
+                return ['success' => false, 'message' => 'Invalid webhook structure: missing value'];
+            }
+
             // Check if this is a status update
-            if (isset($data['entry'][0]['changes'][0]['value']['statuses'])) {
+            if (isset($value['statuses']) && is_array($value['statuses']) && !empty($value['statuses'])) {
+                Log::info('Processing status updates from webhook', ['status_count' => count($value['statuses'])]);
                 return $this->processStatusUpdate($data);
             }
 
             // Check if this is a message
-            if (!isset($data['entry'][0]['changes'][0]['value']['messages'])) {
+            if (!isset($value['messages']) || !is_array($value['messages']) || empty($value['messages'])) {
+                Log::debug('No messages or status updates in webhook data', [
+                    'has_statuses' => isset($value['statuses']),
+                    'has_messages' => isset($value['messages']),
+                    'value_keys' => array_keys($value)
+                ]);
                 return ['success' => false, 'message' => 'No messages or status updates in webhook data'];
             }
 
-            $messages = $data['entry'][0]['changes'][0]['value']['messages'];
+            $messages = $value['messages'];
             $processed = [];
+            $errors = [];
 
             // Get phone number ID from webhook metadata for user identification
             $phoneNumberId = $data['entry'][0]['changes'][0]['value']['metadata']['phone_number_id'] ?? null;
@@ -756,17 +882,20 @@ class WhatsAppService
                 }
             }
 
-            foreach ($messages as $message) {
-                // Validate required fields
-                if (!isset($message['from']) || !isset($message['id']) || !isset($message['type'])) {
-                    Log::warning('Invalid message structure in webhook', [
-                        'message' => $message,
-                        'has_from' => isset($message['from']),
-                        'has_id' => isset($message['id']),
-                        'has_type' => isset($message['type'])
-                    ]);
-                    continue;
-                }
+            foreach ($messages as $index => $message) {
+                try {
+                    // Validate required fields
+                    if (!isset($message['from']) || !isset($message['id']) || !isset($message['type'])) {
+                        Log::warning('Invalid message structure in webhook', [
+                            'message_index' => $index,
+                            'has_from' => isset($message['from']),
+                            'has_id' => isset($message['id']),
+                            'has_type' => isset($message['type']),
+                            'message_keys' => array_keys($message)
+                        ]);
+                        $errors[] = "Message #{$index} missing required fields (from, id, or type)";
+                        continue;
+                    }
 
                 $from = $message['from'];
                 $messageId = $message['id'];
@@ -879,28 +1008,52 @@ class WhatsAppService
                     Log::error('Failed to save received message', [
                         'error' => $e->getMessage(),
                         'message_data' => $dbData,
-                        'trace' => $e->getTraceAsString()
+                        'trace' => $e->getTraceAsString(),
+                        'message_index' => $index
                     ]);
+                    $errors[] = "Failed to save message #{$index}: " . $e->getMessage();
                     // Continue processing other messages even if one fails
                     continue;
                 }
                 
-                Log::info('Received message saved', [
+                Log::info('Received message saved successfully', [
                     'user_id' => $userId,
                     'phone_number' => $from,
                     'message_id' => $messageId,
-                    'type' => $type
+                    'type' => $type,
+                    'conversation_id' => $conversationId
                 ]);
 
                 $processed[] = $messageData;
-
-                Log::info('WhatsApp webhook message processed', $messageData);
+                } catch (\Exception $e) {
+                    Log::error('Error processing individual message', [
+                        'message_index' => $index,
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                        'message' => $message
+                    ]);
+                    $errors[] = "Error processing message #{$index}: " . $e->getMessage();
+                }
             }
 
-            return [
-                'success' => true,
-                'messages' => $processed
+            $result = [
+                'success' => count($processed) > 0 || empty($errors),
+                'messages' => $processed,
+                'processed_count' => count($processed)
             ];
+            
+            if (!empty($errors)) {
+                $result['errors'] = $errors;
+                $result['error_count'] = count($errors);
+            }
+            
+            Log::info('Webhook message processing completed', [
+                'processed_count' => count($processed),
+                'error_count' => count($errors),
+                'user_id' => $userId
+            ]);
+
+            return $result;
         } catch (\Exception $e) {
             Log::error('WhatsApp webhook processing exception', [
                 'message' => $e->getMessage(),

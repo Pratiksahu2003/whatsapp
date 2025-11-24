@@ -29,7 +29,7 @@ class SettingsController extends Controller
             'whatsapp_phone_number_id' => $request->whatsapp_phone_number_id,
             'whatsapp_access_token' => $request->whatsapp_access_token,
             'whatsapp_verify_token' => $request->whatsapp_verify_token,
-            'whatsapp_api_url' => $request->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0',
+            'whatsapp_api_url' => $request->whatsapp_api_url ?? 'https://graph.facebook.com/v24.0',
         ]);
 
         return redirect()->route('settings')->with('success', 'WhatsApp credentials updated successfully!');
@@ -47,13 +47,16 @@ class SettingsController extends Controller
         }
 
         try {
-            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0';
+            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v24.0';
             $phoneNumberId = $user->whatsapp_phone_number_id;
             $accessToken = $user->whatsapp_access_token;
 
             // Test connection by fetching phone number details
-            $response = Http::withToken($accessToken)
-                ->get("{$apiUrl}/{$phoneNumberId}?fields=verified_name,display_phone_number,quality_rating");
+            // According to WhatsApp Cloud API v24.0 documentation
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'Accept' => 'application/json'
+            ])->get("{$apiUrl}/{$phoneNumberId}?fields=verified_name,display_phone_number,quality_rating");
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -70,8 +73,10 @@ class SettingsController extends Controller
             }
 
             // If phone number endpoint fails, try a simpler test
-            $testResponse = Http::withToken($accessToken)
-                ->get("{$apiUrl}/me");
+            $testResponse = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'Accept' => 'application/json'
+            ])->get("{$apiUrl}/me");
 
             if ($testResponse->successful()) {
                 return response()->json([
@@ -112,13 +117,16 @@ class SettingsController extends Controller
         }
 
         try {
-            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0';
+            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v24.0';
             $phoneNumberId = $user->whatsapp_phone_number_id;
             $accessToken = $user->whatsapp_access_token;
 
             // Verify phone number registration status
-            $response = Http::withToken($accessToken)
-                ->get("{$apiUrl}/{$phoneNumberId}?fields=verified_name,display_phone_number,quality_rating,code_verification_status,account_mode,status");
+            // According to WhatsApp Cloud API v24.0 documentation
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'Accept' => 'application/json'
+            ])->get("{$apiUrl}/{$phoneNumberId}?fields=verified_name,display_phone_number,quality_rating,code_verification_status,account_mode,status");
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -214,7 +222,7 @@ class SettingsController extends Controller
         ]);
 
         try {
-            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0';
+            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v24.0';
             $accessToken = $user->whatsapp_access_token;
 
             // Build the payload (without cert as per user request)
@@ -241,8 +249,12 @@ class SettingsController extends Controller
                 'method' => $request->method
             ]);
             
-            $response = Http::withToken($accessToken)
-                ->post($endpoint, $payload);
+            // According to WhatsApp Cloud API v24.0 documentation
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ])->post($endpoint, $payload);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -303,7 +315,7 @@ class SettingsController extends Controller
         ]);
 
         try {
-            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0';
+            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v24.0';
             $phoneNumberId = $user->whatsapp_phone_number_id;
             $accessToken = $user->whatsapp_access_token;
 
@@ -326,8 +338,12 @@ class SettingsController extends Controller
                 'phone_number_id' => $phoneNumberId
             ]);
             
-            $response = Http::withToken($accessToken)
-                ->post($endpoint, $payload);
+            // According to WhatsApp Cloud API v24.0 documentation
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ])->post($endpoint, $payload);
 
             if ($response->successful()) {
                 $data = $response->json();

@@ -99,11 +99,13 @@ A Laravel project for integrating with Meta's WhatsApp Business API. This projec
 Add these to your `.env` file:
 
 ```env
-WHATSAPP_API_URL=https://graph.facebook.com/v18.0
+WHATSAPP_API_URL=https://graph.facebook.com/v24.0
 WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id_here
 WHATSAPP_ACCESS_TOKEN=your_access_token_here
 WHATSAPP_VERIFY_TOKEN=your_verify_token_here
 ```
+
+**Note:** This application uses WhatsApp Cloud API v24.0 following the [official Meta documentation](https://developers.facebook.com/documentation/business-messaging/whatsapp/).
 
 ## API Endpoints
 

@@ -171,15 +171,17 @@
                                 API URL
                             </label>
                             <input type="url" id="whatsapp_api_url" name="whatsapp_api_url" 
-                                value="{{ old('whatsapp_api_url', $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0') }}"
-                                placeholder="https://graph.facebook.com/v21.0"
+                                value="{{ old('whatsapp_api_url', $user->whatsapp_api_url ?? 'https://graph.facebook.com/v24.0') }}"
+                                placeholder="https://graph.facebook.com/v24.0"
                                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500">
                             <p class="mt-1 text-xs text-gray-500">
-                                <i class="fas fa-info-circle"></i> WhatsApp Cloud API URL (Default: v21.0). Use the latest version for best compatibility.
+                                <i class="fas fa-info-circle"></i> WhatsApp Cloud API URL (Default: v24.0 - Latest). 
+                                <a href="https://developers.facebook.com/docs/whatsapp" target="_blank" class="text-blue-600 hover:underline">Official Documentation</a>
                             </p>
                             <div class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
-                                <strong><i class="fas fa-cloud mr-1"></i>Cloud API:</strong> This application uses WhatsApp Cloud API. 
-                                Make sure you're using Cloud API credentials from Meta Business Manager, not On-Premises API.
+                                <strong><i class="fas fa-cloud mr-1"></i>Cloud API v24.0:</strong> This application uses WhatsApp Cloud API v24.0 following 
+                                <a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/" target="_blank" class="underline font-semibold">official Meta documentation</a>. 
+                                Make sure you're using Cloud API credentials from Meta Business Manager.
                             </div>
                             @error('whatsapp_api_url')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -325,8 +327,11 @@
                             <li><strong>Phone Number ID:</strong> Found in API Setup page (starts with numbers)</li>
                             <li><strong>Access Token:</strong> Generate from API Setup → "Temporary" or create System User for permanent token</li>
                             <li><strong>Verify Token:</strong> Create any random string (e.g., use Generate button above)</li>
-                            <li><strong>API URL:</strong> Use default <code class="bg-blue-100 px-1 rounded">https://graph.facebook.com/v21.0</code> (Cloud API)</li>
+                            <li><strong>API URL:</strong> Use default <code class="bg-blue-100 px-1 rounded">https://graph.facebook.com/v24.0</code> (Cloud API v24.0)</li>
                         </ol>
+                        <p class="text-xs text-blue-700 mt-2">
+                            📚 Reference: <a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/" target="_blank" class="underline font-semibold">Official WhatsApp Cloud API Documentation</a>
+                        </p>
                     </div>
                     <div>
                         <p class="font-semibold mb-1">Step 4: Configure Webhook</p>
@@ -343,10 +348,11 @@
                             <i class="fas fa-lightbulb mr-1"></i>Important Notes:
                         </p>
                         <ul class="text-xs text-blue-800 list-disc list-inside ml-2 space-y-1">
-                            <li>This application uses <strong>WhatsApp Cloud API</strong> (not On-Premises API)</li>
-                            <li>Make sure you're using Cloud API credentials from Meta Business Manager</li>
+                            <li>This application uses <strong>WhatsApp Cloud API v24.0</strong> following <a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/" target="_blank" class="underline font-semibold">official Meta documentation</a></li>
+                            <li>Make sure you're using Cloud API credentials from Meta Business Manager (not On-Premises API)</li>
                             <li>For production, create a System User with permanent access token</li>
                             <li>Temporary tokens expire in 24 hours - use System User tokens for production</li>
+                            <li>API v24.0 includes latest features and improvements from Meta</li>
                         </ul>
                     </div>
                 </div>

@@ -203,26 +203,47 @@ class WhatsAppController extends Controller
             }
         }
 
-        $result = $service->processWebhook($data, $userId);
+        try {
+            $result = $service->processWebhook($data, $userId);
 
-        // Log webhook processing result
-        if (isset($result['success']) && $result['success']) {
-            if (isset($result['processed'])) {
-                Log::info('Webhook status updates processed', [
-                    'processed_count' => count($result['processed']),
-                    'user_id' => $userId
+            // Log webhook processing result with detailed information
+            if (isset($result['success']) && $result['success']) {
+                if (isset($result['processed'])) {
+                    Log::info('Webhook status updates processed successfully', [
+                        'processed_count' => count($result['processed']),
+                        'user_id' => $userId,
+                        'processed' => $result['processed']
+                    ]);
+                }
+                if (isset($result['messages'])) {
+                    Log::info('Webhook messages processed successfully', [
+                        'messages_count' => count($result['messages']),
+                        'user_id' => $userId,
+                        'processed_count' => $result['processed_count'] ?? count($result['messages'])
+                    ]);
+                }
+                
+                // Log any errors that occurred during processing
+                if (isset($result['errors']) && !empty($result['errors'])) {
+                    Log::warning('Webhook processed with some errors', [
+                        'error_count' => $result['error_count'] ?? count($result['errors']),
+                        'errors' => $result['errors'],
+                        'user_id' => $userId
+                    ]);
+                }
+            } else {
+                Log::warning('Webhook processing failed', [
+                    'error' => $result['error'] ?? $result['message'] ?? 'Unknown error',
+                    'user_id' => $userId,
+                    'result' => $result
                 ]);
             }
-            if (isset($result['messages'])) {
-                Log::info('Webhook messages processed', [
-                    'messages_count' => count($result['messages']),
-                    'user_id' => $userId
-                ]);
-            }
-        } else {
-            Log::warning('Webhook processing returned failure', [
-                'result' => $result,
-                'user_id' => $userId
+        } catch (\Exception $e) {
+            Log::error('Exception in webhook processing', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $userId,
+                'webhook_data_keys' => array_keys($data)
             ]);
         }
 

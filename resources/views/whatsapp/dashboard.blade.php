@@ -34,10 +34,12 @@
                             WhatsApp Cloud API
                         </h3>
                         <p class="text-xs text-green-800">
-                            This application uses <strong>WhatsApp Cloud API</strong> powered by Meta. All messages are sent and received through Meta's Cloud infrastructure for reliable delivery and scalability.
+                            This application uses <strong>WhatsApp Cloud API v24.0</strong> powered by Meta, following the 
+                            <a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/" target="_blank" class="underline font-semibold">official Meta documentation</a>. 
+                            All messages are sent and received through Meta's Cloud infrastructure for reliable delivery and scalability.
                         </p>
                         <p class="text-xs text-green-700 mt-1">
-                            API Version: <code class="bg-green-100 px-1 rounded">{{ $user->whatsapp_api_url ?? 'v21.0' }}</code>
+                            API Version: <code class="bg-green-100 px-1 rounded">{{ $user->whatsapp_api_url ?? 'https://graph.facebook.com/v24.0' }}</code>
                         </p>
                     </div>
                 </div>
