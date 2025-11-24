@@ -29,7 +29,7 @@ class SettingsController extends Controller
             'whatsapp_phone_number_id' => $request->whatsapp_phone_number_id,
             'whatsapp_access_token' => $request->whatsapp_access_token,
             'whatsapp_verify_token' => $request->whatsapp_verify_token,
-            'whatsapp_api_url' => $request->whatsapp_api_url ?? 'https://graph.facebook.com/v18.0',
+            'whatsapp_api_url' => $request->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0',
         ]);
 
         return redirect()->route('settings')->with('success', 'WhatsApp credentials updated successfully!');
@@ -47,7 +47,7 @@ class SettingsController extends Controller
         }
 
         try {
-            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v18.0';
+            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0';
             $phoneNumberId = $user->whatsapp_phone_number_id;
             $accessToken = $user->whatsapp_access_token;
 
@@ -112,7 +112,7 @@ class SettingsController extends Controller
         }
 
         try {
-            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v18.0';
+            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0';
             $phoneNumberId = $user->whatsapp_phone_number_id;
             $accessToken = $user->whatsapp_access_token;
 
@@ -214,7 +214,7 @@ class SettingsController extends Controller
         ]);
 
         try {
-            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v18.0';
+            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0';
             $accessToken = $user->whatsapp_access_token;
 
             // Build the payload (without cert as per user request)
@@ -303,7 +303,7 @@ class SettingsController extends Controller
         ]);
 
         try {
-            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v18.0';
+            $apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0';
             $phoneNumberId = $user->whatsapp_phone_number_id;
             $accessToken = $user->whatsapp_access_token;
 

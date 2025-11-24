@@ -171,12 +171,16 @@
                                 API URL
                             </label>
                             <input type="url" id="whatsapp_api_url" name="whatsapp_api_url" 
-                                value="{{ old('whatsapp_api_url', $user->whatsapp_api_url ?? 'https://graph.facebook.com/v18.0') }}"
-                                placeholder="https://graph.facebook.com/v18.0"
+                                value="{{ old('whatsapp_api_url', $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0') }}"
+                                placeholder="https://graph.facebook.com/v21.0"
                                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500">
                             <p class="mt-1 text-xs text-gray-500">
-                                <i class="fas fa-info-circle"></i> Default: https://graph.facebook.com/v18.0
+                                <i class="fas fa-info-circle"></i> WhatsApp Cloud API URL (Default: v21.0). Use the latest version for best compatibility.
                             </p>
+                            <div class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
+                                <strong><i class="fas fa-cloud mr-1"></i>Cloud API:</strong> This application uses WhatsApp Cloud API. 
+                                Make sure you're using Cloud API credentials from Meta Business Manager, not On-Premises API.
+                            </div>
                             @error('whatsapp_api_url')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
@@ -295,15 +299,57 @@
 
             <div class="mt-6 bg-blue-50 rounded-lg p-6">
                 <h3 class="text-sm font-semibold text-blue-900 mb-2">
-                    <i class="fas fa-info-circle mr-2"></i>How to Get Your Credentials
+                    <i class="fas fa-cloud mr-2"></i>WhatsApp Cloud API Setup Guide
                 </h3>
-                <ol class="list-decimal list-inside text-sm text-blue-800 space-y-1">
-                    <li>Go to <a href="https://developers.facebook.com/" target="_blank" class="underline">Meta for Developers</a></li>
-                    <li>Create a new app or use an existing one</li>
-                    <li>Add WhatsApp product to your app</li>
-                    <li>Get your Phone Number ID and Access Token from the WhatsApp API setup</li>
-                    <li>Create a Verify Token (any random string) for webhook verification</li>
-                </ol>
+                <div class="text-sm text-blue-800 space-y-3">
+                    <div>
+                        <p class="font-semibold mb-1">Step 1: Create Meta Developer Account</p>
+                        <ol class="list-decimal list-inside ml-2 space-y-1">
+                            <li>Go to <a href="https://developers.facebook.com/" target="_blank" class="underline font-medium">Meta for Developers</a></li>
+                            <li>Click "My Apps" → "Create App"</li>
+                            <li>Select "Business" app type</li>
+                            <li>Fill in app details and create</li>
+                        </ol>
+                    </div>
+                    <div>
+                        <p class="font-semibold mb-1">Step 2: Add WhatsApp Product</p>
+                        <ol class="list-decimal list-inside ml-2 space-y-1">
+                            <li>In your app dashboard, click "Add Product"</li>
+                            <li>Select "WhatsApp" → Click "Set Up"</li>
+                            <li>Navigate to "API Setup" in WhatsApp section</li>
+                        </ol>
+                    </div>
+                    <div>
+                        <p class="font-semibold mb-1">Step 3: Get Your Credentials</p>
+                        <ol class="list-decimal list-inside ml-2 space-y-1">
+                            <li><strong>Phone Number ID:</strong> Found in API Setup page (starts with numbers)</li>
+                            <li><strong>Access Token:</strong> Generate from API Setup → "Temporary" or create System User for permanent token</li>
+                            <li><strong>Verify Token:</strong> Create any random string (e.g., use Generate button above)</li>
+                            <li><strong>API URL:</strong> Use default <code class="bg-blue-100 px-1 rounded">https://graph.facebook.com/v21.0</code> (Cloud API)</li>
+                        </ol>
+                    </div>
+                    <div>
+                        <p class="font-semibold mb-1">Step 4: Configure Webhook</p>
+                        <ol class="list-decimal list-inside ml-2 space-y-1">
+                            <li>Go to "Configuration" → "Webhooks"</li>
+                            <li>Set Callback URL: <code class="bg-blue-100 px-1 rounded">{{ url('/whatsapp/webhook') }}</code></li>
+                            <li>Set Verify Token: (use the token from above)</li>
+                            <li>Subscribe to: <strong>messages</strong> and <strong>message_status</strong></li>
+                            <li>Click "Verify and Save"</li>
+                        </ol>
+                    </div>
+                    <div class="mt-3 p-2 bg-blue-100 rounded border border-blue-200">
+                        <p class="text-xs font-semibold text-blue-900 mb-1">
+                            <i class="fas fa-lightbulb mr-1"></i>Important Notes:
+                        </p>
+                        <ul class="text-xs text-blue-800 list-disc list-inside ml-2 space-y-1">
+                            <li>This application uses <strong>WhatsApp Cloud API</strong> (not On-Premises API)</li>
+                            <li>Make sure you're using Cloud API credentials from Meta Business Manager</li>
+                            <li>For production, create a System User with permanent access token</li>
+                            <li>Temporary tokens expire in 24 hours - use System User tokens for production</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

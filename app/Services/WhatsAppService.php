@@ -16,14 +16,14 @@ class WhatsAppService
     public function __construct($user = null)
     {
         if ($user && $user->hasWhatsAppCredentials()) {
-            // Use user-specific credentials
-            $this->apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v18.0';
+            // Use user-specific credentials - Default to Cloud API v21.0
+            $this->apiUrl = $user->whatsapp_api_url ?? 'https://graph.facebook.com/v21.0';
             $this->phoneNumberId = $user->whatsapp_phone_number_id;
             $this->accessToken = $user->whatsapp_access_token;
             $this->verifyToken = $user->whatsapp_verify_token;
         } else {
-            // Fallback to config (for backward compatibility)
-            $this->apiUrl = config('services.whatsapp.api_url', 'https://graph.facebook.com/v18.0');
+            // Fallback to config (for backward compatibility) - Default to Cloud API v21.0
+            $this->apiUrl = config('services.whatsapp.api_url', 'https://graph.facebook.com/v21.0');
             $this->phoneNumberId = config('services.whatsapp.phone_number_id');
             $this->accessToken = config('services.whatsapp.access_token');
             $this->verifyToken = config('services.whatsapp.verify_token');

@@ -23,6 +23,26 @@
                 </div>
             @endif
 
+            <!-- Cloud API Info -->
+            <div class="mb-6 rounded-md bg-green-50 border border-green-200 p-4">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-cloud text-green-500 text-xl"></i>
+                    </div>
+                    <div class="ml-3 flex-1">
+                        <h3 class="text-sm font-semibold text-green-900 mb-1">
+                            WhatsApp Cloud API
+                        </h3>
+                        <p class="text-xs text-green-800">
+                            This application uses <strong>WhatsApp Cloud API</strong> powered by Meta. All messages are sent and received through Meta's Cloud infrastructure for reliable delivery and scalability.
+                        </p>
+                        <p class="text-xs text-green-700 mt-1">
+                            API Version: <code class="bg-green-100 px-1 rounded">{{ $user->whatsapp_api_url ?? 'v21.0' }}</code>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Webhook Status Info -->
             <div class="mb-6 rounded-md bg-blue-50 border border-blue-200 p-4">
                 <div class="flex items-start justify-between">
