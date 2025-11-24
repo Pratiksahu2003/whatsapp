@@ -25,23 +25,40 @@
 
             <!-- Webhook Status Info -->
             <div class="mb-6 rounded-md bg-blue-50 border border-blue-200 p-4">
-                <div class="flex items-start">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-info-circle text-blue-400"></i>
-                    </div>
-                    <div class="ml-3 flex-1">
-                        <h3 class="text-sm font-medium text-blue-800">
-                            Message Delivery Status
-                        </h3>
-                        <div class="mt-2 text-sm text-blue-700">
-                            <p>Message status updates (delivered, read, failed) are received via webhooks from Meta. 
-                            <strong>Ensure your webhook URL is properly configured</strong> in Meta Business Manager to receive real-time status updates.</p>
-                            <p class="mt-1">Messages sent via API will appear in Meta's WhatsApp Business Manager. If messages don't show up, check:</p>
-                            <ul class="list-disc list-inside mt-1 space-y-1">
-                                <li>Webhook URL is configured: <code class="bg-blue-100 px-1 rounded">{{ url('/whatsapp/webhook') }}</code></li>
-                                <li>Webhook is verified and active in Meta Business Manager</li>
-                                <li>Phone number status is CONNECTED (not PENDING)</li>
-                            </ul>
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start flex-1">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-info-circle text-blue-400"></i>
+                        </div>
+                        <div class="ml-3 flex-1">
+                            <h3 class="text-sm font-medium text-blue-800">
+                                Message Delivery Status & Webhook Configuration
+                            </h3>
+                            <div class="mt-2 text-sm text-blue-700">
+                                <p>Message status updates (delivered, read, failed) are received via webhooks from Meta. 
+                                <strong>Ensure your webhook URL is properly configured</strong> in Meta Business Manager to receive real-time status updates.</p>
+                                <p class="mt-1">Messages sent via API will appear in Meta's WhatsApp Business Manager. If messages don't show up, check:</p>
+                                <ul class="list-disc list-inside mt-1 space-y-1">
+                                    <li>Webhook URL is configured: <code class="bg-blue-100 px-1 rounded">{{ url('/whatsapp/webhook') }}</code></li>
+                                    <li>Webhook is verified and active in Meta Business Manager</li>
+                                    <li>Subscription fields: <strong>messages</strong> and <strong>message_status</strong> are selected</li>
+                                    <li>Phone number status is CONNECTED (not PENDING)</li>
+                                </ul>
+                                <div class="mt-2 p-2 bg-white rounded border border-blue-200">
+                                    <p class="text-xs font-semibold mb-1">Quick Links:</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <a href="{{ route('settings') }}" class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">
+                                            <i class="fas fa-cog"></i> Settings
+                                        </a>
+                                        <a href="{{ route('whatsapp.test-webhook') }}" class="text-xs bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded">
+                                            <i class="fas fa-vial"></i> Test Webhook
+                                        </a>
+                                        <button onclick="syncPendingMessages()" class="text-xs bg-purple-500 hover:bg-purple-600 text-white px-2 py-1 rounded">
+                                            <i class="fas fa-sync"></i> Sync Status
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

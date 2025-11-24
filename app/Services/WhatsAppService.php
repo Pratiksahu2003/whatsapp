@@ -741,11 +741,37 @@ class WhatsAppService
             $messages = $data['entry'][0]['changes'][0]['value']['messages'];
             $processed = [];
 
+            // Get phone number ID from webhook metadata for user identification
+            $phoneNumberId = $data['entry'][0]['changes'][0]['value']['metadata']['phone_number_id'] ?? null;
+            
+            // Try to find user by phone number ID if userId not provided
+            if (!$userId && $phoneNumberId) {
+                $user = \App\Models\User::where('whatsapp_phone_number_id', $phoneNumberId)->first();
+                if ($user) {
+                    $userId = $user->id;
+                    Log::info('User identified from phone number ID in webhook', [
+                        'user_id' => $userId,
+                        'phone_number_id' => $phoneNumberId
+                    ]);
+                }
+            }
+
             foreach ($messages as $message) {
+                // Validate required fields
+                if (!isset($message['from']) || !isset($message['id']) || !isset($message['type'])) {
+                    Log::warning('Invalid message structure in webhook', [
+                        'message' => $message,
+                        'has_from' => isset($message['from']),
+                        'has_id' => isset($message['id']),
+                        'has_type' => isset($message['type'])
+                    ]);
+                    continue;
+                }
+
                 $from = $message['from'];
                 $messageId = $message['id'];
                 $type = $message['type'];
-                $timestamp = $message['timestamp'];
+                $timestamp = $message['timestamp'] ?? time();
 
                 $messageData = [
                     'from' => $from,
@@ -790,8 +816,9 @@ class WhatsAppService
                         break;
                 }
 
-                // If no user_id provided, try to find user from existing messages with same phone number
+                // If no user_id provided, try multiple fallback methods
                 if (!$userId) {
+                    // Method 1: Try to find user from existing messages with same phone number
                     $existingMessage = Message::where('phone_number', $from)
                         ->whereNotNull('user_id')
                         ->orderBy('created_at', 'desc')
@@ -803,15 +830,60 @@ class WhatsAppService
                             'phone_number' => $from
                         ]);
                     }
+                    
+                    // Method 2: If still no user, try to find by phone number ID from metadata
+                    if (!$userId && $phoneNumberId) {
+                        $user = \App\Models\User::where('whatsapp_phone_number_id', $phoneNumberId)->first();
+                        if ($user) {
+                            $userId = $user->id;
+                            Log::info('User identified from phone number ID fallback', [
+                                'user_id' => $userId,
+                                'phone_number_id' => $phoneNumberId
+                            ]);
+                        }
+                    }
+                    
+                    // Method 3: If still no user, try to find any user with WhatsApp credentials
+                    // (for single-user setups)
+                    if (!$userId) {
+                        $user = \App\Models\User::whereNotNull('whatsapp_phone_number_id')
+                            ->whereNotNull('whatsapp_access_token')
+                            ->first();
+                        if ($user) {
+                            $userId = $user->id;
+                            Log::info('User identified from first available WhatsApp user', [
+                                'user_id' => $userId
+                            ]);
+                        }
+                    }
                 }
                 
                 // Generate conversation ID (phone number + user_id for grouping)
                 $conversationId = $userId ? "{$userId}_{$from}" : $from;
                 $dbData['conversation_id'] = $conversationId;
                 
-                // Save received message to database
+                // Save received message to database (even if no user_id - we'll try to assign later)
                 $dbData['user_id'] = $userId;
-                Message::create($dbData);
+                
+                try {
+                    Message::create($dbData);
+                    
+                    Log::info('Received message saved successfully', [
+                        'user_id' => $userId,
+                        'phone_number' => $from,
+                        'message_id' => $messageId,
+                        'type' => $type,
+                        'conversation_id' => $conversationId
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to save received message', [
+                        'error' => $e->getMessage(),
+                        'message_data' => $dbData,
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                    // Continue processing other messages even if one fails
+                    continue;
+                }
                 
                 Log::info('Received message saved', [
                     'user_id' => $userId,

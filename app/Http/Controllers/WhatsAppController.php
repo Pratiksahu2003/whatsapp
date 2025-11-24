@@ -23,56 +23,107 @@ class WhatsAppController extends Controller
      * Webhook verification endpoint
      * This is called by Meta when setting up the webhook
      * Note: This endpoint must work without authentication
+     * Meta sends parameters as GET query parameters: ?hub_mode=subscribe&hub_verify_token=TOKEN&hub_challenge=CHALLENGE
      */
     public function verify(Request $request)
     {
-        $mode = $request->query('hub_mode');
-        $token = $request->query('hub_verify_token');
-        $challenge = $request->query('hub_challenge');
+        // Meta sends these as GET query parameters
+        $mode = $request->query('hub_mode') ?? $request->input('hub_mode');
+        $token = $request->query('hub_verify_token') ?? $request->input('hub_verify_token');
+        $challenge = $request->query('hub_challenge') ?? $request->input('hub_challenge');
 
+        // Log all query parameters for debugging
         Log::info('Webhook verification attempt', [
             'mode' => $mode,
             'token_received' => $token ? 'yes' : 'no',
+            'token_length' => $token ? strlen($token) : 0,
             'challenge_received' => $challenge ? 'yes' : 'no',
+            'challenge_length' => $challenge ? strlen($challenge) : 0,
+            'all_params' => $request->all(),
             'has_auth' => Auth::check()
         ]);
 
         // Meta requires mode to be 'subscribe' and token to match
         if ($mode !== 'subscribe') {
-            Log::warning('Webhook verification failed: Invalid mode', ['mode' => $mode]);
-            return response('Forbidden', 403);
+            Log::warning('Webhook verification failed: Invalid mode', [
+                'mode' => $mode,
+                'expected' => 'subscribe'
+            ]);
+            return response('Forbidden: Invalid mode', 403);
         }
 
         if (!$token || !$challenge) {
             Log::warning('Webhook verification failed: Missing token or challenge', [
                 'has_token' => !empty($token),
-                'has_challenge' => !empty($challenge)
+                'has_challenge' => !empty($challenge),
+                'token_value' => $token ? substr($token, 0, 10) . '...' : null
             ]);
-            return response('Forbidden', 403);
+            return response('Forbidden: Missing token or challenge', 403);
         }
 
-        // Try to find user by verify token (check all users)
+        // Trim token to handle any whitespace issues
+        $token = trim($token);
+        
+        // Try to find user by verify token (exact match first)
         $user = \App\Models\User::where('whatsapp_verify_token', $token)->first();
         
+        // If not found, try trimmed match (in case database has whitespace)
+        if (!$user) {
+            $allUsers = \App\Models\User::whereNotNull('whatsapp_verify_token')->get();
+            foreach ($allUsers as $u) {
+                if (trim($u->whatsapp_verify_token) === $token) {
+                    $user = $u;
+                    Log::info('User found with trimmed token match', ['user_id' => $user->id]);
+                    break;
+                }
+            }
+        }
+        
         if ($user) {
+            // Verify the user has WhatsApp credentials configured
+            if (!$user->hasWhatsAppCredentials()) {
+                Log::warning('Webhook verification failed: User found but missing WhatsApp credentials', [
+                    'user_id' => $user->id
+                ]);
+                return response('Forbidden: User credentials not configured', 403);
+            }
+            
             $service = new WhatsAppService($user);
             $result = $service->verifyWebhook($mode, $token, $challenge);
             
             if ($result !== false) {
                 Log::info('Webhook verification successful', [
                     'user_id' => $user->id,
-                    'challenge_returned' => $challenge
+                    'challenge_returned' => $challenge,
+                    'token_matched' => true
                 ]);
                 return response($challenge, 200)->header('Content-Type', 'text/plain');
+            } else {
+                Log::warning('Webhook verification failed: Service verification returned false', [
+                    'user_id' => $user->id,
+                    'user_verify_token' => substr($user->whatsapp_verify_token, 0, 10) . '...',
+                    'provided_token' => substr($token, 0, 10) . '...'
+                ]);
             }
         } else {
+            // Log all available verify tokens (first 5 chars) for debugging
+            $availableTokens = \App\Models\User::whereNotNull('whatsapp_verify_token')
+                ->pluck('whatsapp_verify_token')
+                ->map(function($t) {
+                    return substr(trim($t), 0, 5) . '...';
+                })
+                ->toArray();
+                
             Log::warning('Webhook verification failed: No user found with matching verify token', [
-                'token_provided' => substr($token, 0, 5) . '...' // Log partial token for debugging
+                'token_provided' => substr($token, 0, 10) . '...',
+                'token_length' => strlen($token),
+                'available_tokens_count' => count($availableTokens),
+                'available_tokens_preview' => $availableTokens
             ]);
         }
 
-        // If no user found, return 403
-        return response('Forbidden', 403);
+        // If no user found, return 403 with helpful message
+        return response('Forbidden: Verify token does not match', 403);
     }
 
     /**
@@ -82,7 +133,15 @@ class WhatsAppController extends Controller
     {
         $data = $request->all();
 
-        Log::info('WhatsApp webhook received', ['data' => $data]);
+        // Log webhook receipt (but don't log full data in production to avoid sensitive info)
+        Log::info('WhatsApp webhook received', [
+            'has_entry' => isset($data['entry']),
+            'entry_count' => isset($data['entry']) ? count($data['entry']) : 0,
+            'has_changes' => isset($data['entry'][0]['changes']),
+            'has_messages' => isset($data['entry'][0]['changes'][0]['value']['messages']),
+            'has_statuses' => isset($data['entry'][0]['changes'][0]['value']['statuses']),
+            'phone_number_id' => $data['entry'][0]['changes'][0]['value']['metadata']['phone_number_id'] ?? null
+        ]);
 
         // Identify user from webhook data using phone number ID
         $userId = null;
@@ -123,9 +182,25 @@ class WhatsAppController extends Controller
         // Use the identified user's service or fallback to default
         if ($userId) {
             $user = \App\Models\User::find($userId);
-            $service = new WhatsAppService($user);
+            if ($user && $user->hasWhatsAppCredentials()) {
+                $service = new WhatsAppService($user);
+            } else {
+                Log::warning('User found but missing WhatsApp credentials', ['user_id' => $userId]);
+                $service = new WhatsAppService();
+            }
         } else {
-            $service = new WhatsAppService();
+            // Try to find any user with WhatsApp credentials as fallback
+            $fallbackUser = \App\Models\User::whereNotNull('whatsapp_phone_number_id')
+                ->whereNotNull('whatsapp_access_token')
+                ->first();
+            if ($fallbackUser) {
+                Log::info('Using fallback user for webhook processing', ['user_id' => $fallbackUser->id]);
+                $service = new WhatsAppService($fallbackUser);
+                $userId = $fallbackUser->id;
+            } else {
+                Log::warning('No user found for webhook, using default service');
+                $service = new WhatsAppService();
+            }
         }
 
         $result = $service->processWebhook($data, $userId);
@@ -151,8 +226,91 @@ class WhatsAppController extends Controller
             ]);
         }
 
-        // Return 200 OK to acknowledge receipt
-        return response()->json(['status' => 'success'], 200);
+        // Always return 200 OK to acknowledge receipt (even if processing failed)
+        // Meta will retry if we return error codes
+        return response()->json([
+            'status' => 'success',
+            'processed' => isset($result['success']) && $result['success']
+        ], 200);
+    }
+
+    /**
+     * Test webhook endpoint - for debugging
+     */
+    public function testWebhook(Request $request)
+    {
+        $user = Auth::user();
+        
+        // Get all users with verify tokens for comparison
+        $allUsers = \App\Models\User::whereNotNull('whatsapp_verify_token')
+            ->select('id', 'email', 'whatsapp_verify_token')
+            ->get()
+            ->map(function($u) {
+                return [
+                    'id' => $u->id,
+                    'email' => $u->email,
+                    'token_preview' => substr($u->whatsapp_verify_token, 0, 10) . '...',
+                    'token_length' => strlen($u->whatsapp_verify_token),
+                    'token_trimmed_length' => strlen(trim($u->whatsapp_verify_token))
+                ];
+            });
+        
+        return response()->json([
+            'webhook_url' => url('/whatsapp/webhook'),
+            'verify_url' => url('/whatsapp/verify'),
+            'user_id' => $user->id,
+            'has_credentials' => $user->hasWhatsAppCredentials(),
+            'phone_number_id' => $user->whatsapp_phone_number_id,
+            'verify_token_set' => !empty($user->whatsapp_verify_token),
+            'verify_token_preview' => $user->whatsapp_verify_token ? substr($user->whatsapp_verify_token, 0, 10) . '...' : null,
+            'verify_token_length' => $user->whatsapp_verify_token ? strlen($user->whatsapp_verify_token) : 0,
+            'all_users_with_tokens' => $allUsers,
+            'instructions' => [
+                '1' => 'Configure webhook URL in Meta Business Manager: ' . url('/whatsapp/webhook'),
+                '2' => 'Use verify token from settings (must match exactly)',
+                '3' => 'Subscribe to: messages, message_status',
+                '4' => 'Check logs for webhook activity',
+                '5' => 'Verify token must match exactly (no extra spaces)'
+            ],
+            'test_verify_url' => url('/whatsapp/verify') . '?hub_mode=subscribe&hub_verify_token=' . urlencode($user->whatsapp_verify_token ?? '') . '&hub_challenge=test123'
+        ], 200);
+    }
+
+    /**
+     * Diagnostic endpoint for webhook verification
+     * Shows what tokens are configured
+     */
+    public function verifyDiagnostics(Request $request)
+    {
+        $token = $request->query('token');
+        
+        $users = \App\Models\User::whereNotNull('whatsapp_verify_token')->get();
+        
+        $diagnostics = [
+            'verify_url' => url('/whatsapp/verify'),
+            'test_token_provided' => $token ? 'yes' : 'no',
+            'test_token_length' => $token ? strlen($token) : 0,
+            'users_with_tokens' => $users->map(function($user) use ($token) {
+                $userToken = trim($user->whatsapp_verify_token);
+                return [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'token_length' => strlen($userToken),
+                    'token_preview' => substr($userToken, 0, 10) . '...',
+                    'matches_provided' => $token ? (trim($token) === $userToken) : false,
+                    'has_credentials' => $user->hasWhatsAppCredentials()
+                ];
+            }),
+            'instructions' => [
+                '1' => 'Go to Meta Business Manager → WhatsApp → Configuration → Webhook',
+                '2' => 'Set Callback URL: ' . url('/whatsapp/webhook'),
+                '3' => 'Set Verify Token: (use one from above)',
+                '4' => 'Click Verify and Save',
+                '5' => 'Select subscription fields: messages, message_status'
+            ]
+        ];
+        
+        return response()->json($diagnostics, 200);
     }
 
     /**

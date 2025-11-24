@@ -10,11 +10,15 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ScheduledMessageController;
 use App\Http\Controllers\BulkMessageController;
 use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\PageController;
 
 // Public routes
 Route::get('/', function () {
     return Auth::check() ? redirect()->route('whatsapp.dashboard') : redirect()->route('login');
 });
+
+// Public pages
+Route::get('/privacy-policy', [PageController::class, 'privacyPolicy'])->name('privacy-policy');
 
 // Authentication routes
 Route::get('/login', function () {
@@ -112,5 +116,12 @@ Route::middleware('auth')->group(function () {
 // Webhook routes (public, but should be secured in production)
 Route::prefix('whatsapp')->group(function () {
     Route::match(['get', 'post'], '/webhook', [WhatsAppController::class, 'webhook'])->name('whatsapp.webhook');
-    Route::get('/verify', [WhatsAppController::class, 'verify'])->name('whatsapp.verify');
+    // Meta uses GET for verification, but allow POST as fallback
+    Route::match(['get', 'post'], '/verify', [WhatsAppController::class, 'verify'])->name('whatsapp.verify');
+});
+
+// Test webhook endpoint (protected)
+Route::middleware('auth')->group(function () {
+    Route::get('/whatsapp/test-webhook', [WhatsAppController::class, 'testWebhook'])->name('whatsapp.test-webhook');
+    Route::get('/whatsapp/verify-diagnostics', [WhatsAppController::class, 'verifyDiagnostics'])->name('whatsapp.verify-diagnostics');
 });

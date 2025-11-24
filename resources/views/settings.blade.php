@@ -265,6 +265,31 @@
                         <span class="text-gray-500">Meta will call this URL during webhook setup to verify your server.</span>
                     </p>
                 </div>
+
+                <!-- Troubleshooting Section -->
+                <div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <h4 class="text-sm font-semibold text-yellow-900 mb-2">
+                        <i class="fas fa-tools mr-2"></i>Troubleshooting 403 Error
+                    </h4>
+                    <div class="text-xs text-yellow-800 space-y-2">
+                        <p><strong>If you're getting a 403 error when verifying:</strong></p>
+                        <ol class="list-decimal list-inside ml-2 space-y-1">
+                            <li>Make sure your Verify Token is set above (click Generate if needed)</li>
+                            <li>Copy the Verify Token EXACTLY as shown (no extra spaces)</li>
+                            <li>Paste it in Meta Business Manager webhook settings</li>
+                            <li>Check that the token matches exactly (case-sensitive)</li>
+                            <li>Click "Test Webhook" button below to verify your configuration</li>
+                        </ol>
+                        <div class="mt-3 flex items-center space-x-2">
+                            <a href="{{ route('whatsapp.test-webhook') }}" target="_blank" class="px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700">
+                                <i class="fas fa-vial mr-1"></i>Test Webhook Configuration
+                            </a>
+                            <a href="{{ route('whatsapp.verify-diagnostics') }}" target="_blank" class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+                                <i class="fas fa-stethoscope mr-1"></i>View Diagnostics
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
             @endif
 
