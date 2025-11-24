@@ -77,19 +77,13 @@
                         <p class="text-xs text-gray-500 truncate">{{ $user->email ?? '' }}</p>
                     </div>
                 </div>
-                <form method="POST" action="{{ route('logout') }}" class="w-full mb-2">
+                <form method="POST" action="{{ route('logout') }}" class="w-full">
                     @csrf
                     <button type="submit" class="w-full flex items-center space-x-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition">
                         <i class="fas fa-sign-out-alt"></i>
                         <span>Logout</span>
                     </button>
                 </form>
-                <div class="border-t border-gray-200 pt-2 mt-2">
-                    <a href="{{ route('privacy-policy') }}" class="flex items-center space-x-2 px-3 py-2 text-xs text-gray-500 hover:text-gray-700 rounded-md transition">
-                        <i class="fas fa-shield-alt"></i>
-                        <span>Privacy Policy</span>
-                    </a>
-                </div>
             </div>
             @endif
         </aside>

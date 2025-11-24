@@ -71,12 +71,6 @@
                     </a>
                 </div>
             </form>
-            
-            <div class="mt-6 text-center">
-                <a href="{{ route('privacy-policy') }}" class="text-xs text-gray-500 hover:text-gray-700">
-                    <i class="fas fa-shield-alt mr-1"></i>Privacy Policy
-                </a>
-            </div>
         </div>
     </div>
 </body>

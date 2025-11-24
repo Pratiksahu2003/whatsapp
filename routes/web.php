@@ -10,15 +10,11 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ScheduledMessageController;
 use App\Http\Controllers\BulkMessageController;
 use App\Http\Controllers\AnalyticsController;
-use App\Http\Controllers\PageController;
 
 // Public routes
 Route::get('/', function () {
     return Auth::check() ? redirect()->route('whatsapp.dashboard') : redirect()->route('login');
 });
-
-// Public pages
-Route::get('/privacy-policy', [PageController::class, 'privacyPolicy'])->name('privacy-policy');
 
 // Authentication routes
 Route::get('/login', function () {
