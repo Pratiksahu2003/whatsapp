@@ -21,6 +21,29 @@ A Laravel project for integrating with Meta's WhatsApp Business API. This projec
   - Access Token
   - Verify Token (for webhook)
 
+## CSS/Assets Setup
+
+**Important:** For CSS and JavaScript to load properly, you need to:
+
+1. **Development Mode** (with hot reload):
+   ```bash
+   npm run dev
+   ```
+   Keep this running in a separate terminal while developing.
+
+2. **Production Mode** (build assets):
+   ```bash
+   npm run build
+   ```
+   Run this after making changes to CSS/JS files.
+
+3. **Clear Laravel caches** (if styles don't update):
+   ```bash
+   php artisan config:clear
+   php artisan cache:clear
+   php artisan view:clear
+   ```
+
 ## Installation
 
 1. **Clone or navigate to the project directory:**

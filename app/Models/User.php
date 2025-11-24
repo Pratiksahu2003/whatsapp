@@ -21,6 +21,10 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'whatsapp_phone_number_id',
+        'whatsapp_access_token',
+        'whatsapp_verify_token',
+        'whatsapp_api_url',
     ];
 
     /**
@@ -31,6 +35,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'whatsapp_access_token',
     ];
 
     /**
@@ -44,5 +49,21 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Get the messages for the user.
+     */
+    public function messages()
+    {
+        return $this->hasMany(Message::class);
+    }
+
+    /**
+     * Check if user has WhatsApp credentials configured
+     */
+    public function hasWhatsAppCredentials(): bool
+    {
+        return !empty($this->whatsapp_phone_number_id) && !empty($this->whatsapp_access_token);
     }
 }

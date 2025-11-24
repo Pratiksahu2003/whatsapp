@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '@fortawesome/fontawesome-free/css/all.min.css';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -8,4 +9,77 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/* Dashboard Custom Styles */
+.message-card {
+    transition: all 0.3s ease;
+}
+
+.message-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.stat-card.success {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.stat-card.warning {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.stat-card.info {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* Professional Sidebar Navigation */
+.nav-item {
+    display: flex;
+    align-items: center;
+    space-x: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin: 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+    color: #6b7280;
+    text-decoration: none;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.nav-item:hover {
+    background-color: #f3f4f6;
+    color: #111827;
+}
+
+.nav-item.active {
+    background-color: #dcfce7;
+    color: #16a34a;
+}
+
+.nav-item i {
+    width: 1.25rem;
+    margin-right: 0.75rem;
+    text-align: center;
+}
+
+/* Mobile sidebar */
+@media (max-width: 1023px) {
+    #sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 50;
+        transform: translateX(-100%);
+    }
+    
+    #sidebar:not(.-translate-x-full) {
+        transform: translateX(0);
+    }
 }
