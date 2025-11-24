@@ -147,14 +147,19 @@
 
                         <div>
                             <label for="whatsapp_verify_token" class="block text-sm font-medium text-gray-700 mb-2">
-                                Verify Token
+                                Verify Token <span class="text-red-500">*</span> (Required for Webhook)
                             </label>
-                            <input type="text" id="whatsapp_verify_token" name="whatsapp_verify_token" 
-                                value="{{ old('whatsapp_verify_token', $user->whatsapp_verify_token) }}"
-                                placeholder="Your custom verify token (for webhook)"
-                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500">
+                            <div class="flex items-center space-x-2">
+                                <input type="text" id="whatsapp_verify_token" name="whatsapp_verify_token" 
+                                    value="{{ old('whatsapp_verify_token', $user->whatsapp_verify_token) }}"
+                                    placeholder="Your custom verify token (for webhook)"
+                                    class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500">
+                                <button type="button" onclick="generateVerifyToken()" class="px-4 py-2 bg-gray-500 text-white text-sm rounded-md hover:bg-gray-600 transition">
+                                    <i class="fas fa-random"></i> Generate
+                                </button>
+                            </div>
                             <p class="mt-1 text-xs text-gray-500">
-                                <i class="fas fa-info-circle"></i> Create a random string for webhook verification
+                                <i class="fas fa-info-circle"></i> Create a random string for webhook verification. This must match what you enter in Meta Business Manager.
                             </p>
                             @error('whatsapp_verify_token')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -189,6 +194,79 @@
                     </div>
                 </form>
             </div>
+
+            @if($user->hasWhatsAppCredentials() && $user->whatsapp_verify_token)
+            <!-- Webhook Configuration Guide -->
+            <div class="mt-6 bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                    <i class="fas fa-link text-blue-500"></i>
+                    <span>Webhook Configuration</span>
+                </h2>
+                
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <h3 class="text-sm font-semibold text-blue-900 mb-3">
+                        <i class="fas fa-exclamation-circle mr-2"></i>Important: Configure Webhook in Meta Business Manager
+                    </h3>
+                    <div class="space-y-3 text-sm text-blue-800">
+                        <div>
+                            <p class="font-medium mb-1">1. Webhook URL (Callback URL):</p>
+                            <div class="bg-white p-2 rounded border border-blue-200 flex items-center justify-between">
+                                <code class="text-sm break-all flex-1" id="webhookUrl">{{ url('/whatsapp/webhook') }}</code>
+                                <button onclick="copyToClipboard('{{ url('/whatsapp/webhook') }}', 'Webhook URL')" class="ml-2 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="font-medium mb-1">2. Verify Token:</p>
+                            <div class="bg-white p-2 rounded border border-blue-200 flex items-center justify-between">
+                                <code class="text-sm flex-1" id="verifyTokenDisplay">{{ $user->whatsapp_verify_token }}</code>
+                                <button onclick="copyToClipboard('{{ $user->whatsapp_verify_token }}', 'Verify Token')" class="ml-2 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
+                            <p class="text-xs mt-1 text-blue-700">⚠️ This must EXACTLY match the Verify Token above (no extra spaces)</p>
+                        </div>
+                        <div>
+                            <p class="font-medium mb-1">3. Subscription Fields (select these):</p>
+                            <ul class="list-disc list-inside ml-2 space-y-1">
+                                <li><strong>messages</strong> - To receive incoming messages</li>
+                                <li><strong>message_status</strong> - To receive delivery status updates (delivered, read, failed)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <h4 class="text-sm font-semibold text-yellow-900 mb-2">
+                        <i class="fas fa-lightbulb mr-2"></i>Steps to Configure:
+                    </h4>
+                    <ol class="list-decimal list-inside text-sm text-yellow-800 space-y-1 ml-2">
+                        <li>Go to <a href="https://business.facebook.com/" target="_blank" class="underline font-medium">Meta Business Manager</a></li>
+                        <li>Navigate to: <strong>WhatsApp → Configuration → Webhook</strong></li>
+                        <li>Click <strong>"Edit"</strong> or <strong>"Add Webhook"</strong></li>
+                        <li>Paste the <strong>Webhook URL</strong> above</li>
+                        <li>Paste the <strong>Verify Token</strong> above (must match exactly)</li>
+                        <li>Click <strong>"Verify and Save"</strong></li>
+                        <li>Select subscription fields: <strong>messages</strong> and <strong>message_status</strong></li>
+                        <li>Click <strong>"Save"</strong></li>
+                    </ol>
+                    <p class="text-xs mt-3 text-yellow-700">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        <strong>Note:</strong> If verification fails, check that your server is accessible from the internet (use ngrok for local development) and that the Verify Token matches exactly (no extra spaces).
+                    </p>
+                </div>
+
+                <div class="mt-4 p-3 bg-gray-50 rounded border border-gray-200">
+                    <p class="text-xs text-gray-600">
+                        <i class="fas fa-globe mr-1"></i>
+                        <strong>Webhook Verification URL:</strong> <code class="bg-white px-1 rounded">{{ url('/whatsapp/verify') }}</code>
+                        <br>
+                        <span class="text-gray-500">Meta will call this URL during webhook setup to verify your server.</span>
+                    </p>
+                </div>
+            </div>
+            @endif
 
             <div class="mt-6 bg-blue-50 rounded-lg p-6">
                 <h3 class="text-sm font-semibold text-blue-900 mb-2">
@@ -718,6 +796,32 @@
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalBtnHtml;
             }
+        }
+
+        // Generate random verify token
+        function generateVerifyToken() {
+            const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            document.getElementById('whatsapp_verify_token').value = token;
+        }
+
+        // Copy to clipboard
+        function copyToClipboard(text, label = 'Text') {
+            navigator.clipboard.writeText(text).then(function() {
+                // Show temporary success message
+                const btn = event.target.closest('button');
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.add('bg-green-500');
+                btn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                
+                setTimeout(function() {
+                    btn.innerHTML = originalHtml;
+                    btn.classList.remove('bg-green-500');
+                    btn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                }, 2000);
+            }).catch(function(err) {
+                alert('Failed to copy: ' + err);
+            });
         }
     </script>
 

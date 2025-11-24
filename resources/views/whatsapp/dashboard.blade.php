@@ -385,9 +385,18 @@
                                     
                                     @if($message->status == 'sent' && $message->created_at->diffInHours(now()) > 1 && !$message->delivered_at && $message->direction == 'sent')
                                         <div class="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
-                                            <i class="fas fa-info-circle mr-1"></i>
-                                            <strong>No delivery confirmation received.</strong> This message was sent {{ $message->created_at->diffForHumans() }} ago but hasn't received a delivery status update. 
-                                            Ensure your webhook is properly configured in Meta Business Manager.
+                                            <div class="flex items-start justify-between">
+                                                <div class="flex-1">
+                                                    <i class="fas fa-info-circle mr-1"></i>
+                                                    <strong>No delivery confirmation received.</strong> This message was sent {{ $message->created_at->diffForHumans() }} ago but hasn't received a delivery status update. 
+                                                    Ensure your webhook is properly configured in Meta Business Manager.
+                                                </div>
+                                                @if($message->message_id)
+                                                <button onclick="markAsDelivered('{{ $message->message_id }}', this)" class="ml-2 px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded transition" title="Mark as delivered if you confirmed the message was received">
+                                                    <i class="fas fa-check-double"></i> Mark Delivered
+                                                </button>
+                                                @endif
+                                            </div>
                                         </div>
                                     @endif
                                     
@@ -482,6 +491,41 @@ function syncPendingMessages() {
         button.innerHTML = originalHtml;
         console.error('Error:', error);
         alert('Error syncing messages: ' + error.message);
+    });
+}
+
+function markAsDelivered(messageId, buttonElement) {
+    if (!confirm('Are you sure this message was delivered? This will mark it as delivered in the system.')) {
+        return;
+    }
+    
+    const originalHtml = buttonElement.innerHTML;
+    buttonElement.disabled = true;
+    buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    
+    fetch(`{{ url('/whatsapp/mark-delivered') }}/${messageId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Message marked as delivered successfully!');
+            window.location.reload();
+        } else {
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = originalHtml;
+            alert('Failed to mark as delivered: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        buttonElement.disabled = false;
+        buttonElement.innerHTML = originalHtml;
+        console.error('Error:', error);
+        alert('Error marking as delivered: ' + error.message);
     });
 }
 </script>

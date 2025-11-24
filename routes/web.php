@@ -105,6 +105,7 @@ Route::middleware('auth')->group(function () {
         // Message Status & Sync
         Route::post('/sync-pending', [WhatsAppController::class, 'syncPending'])->name('whatsapp.sync-pending');
         Route::get('/message-status/{messageId}', [WhatsAppController::class, 'checkMessageStatus'])->name('whatsapp.message-status');
+        Route::post('/mark-delivered/{messageId}', [WhatsAppController::class, 'markAsDelivered'])->name('whatsapp.mark-delivered');
     });
 });
 

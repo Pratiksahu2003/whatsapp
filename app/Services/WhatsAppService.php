@@ -100,6 +100,8 @@ class WhatsAppService
                 $conversationId = $userId ? "{$userId}_{$normalizedTo}" : $normalizedTo;
                 
                 // Save to database
+                // Note: Status starts as 'sent' - webhook will update to 'delivered' when message is actually delivered
+                // If webhook doesn't update within reasonable time, we can assume delivered (see syncPendingMessages)
                 Message::create([
                     'user_id' => $userId,
                     'direction' => 'sent',
@@ -108,7 +110,7 @@ class WhatsAppService
                     'conversation_id' => $conversationId,
                     'message_type' => 'text',
                     'content' => $message,
-                    'status' => 'sent',
+                    'status' => 'sent', // Will be updated to 'delivered' via webhook
                     'sent_at' => now(),
                     'metadata' => $responseData,
                 ]);
@@ -540,9 +542,34 @@ class WhatsAppService
      */
     public function verifyWebhook(string $mode, string $token, string $challenge)
     {
-        if ($mode === 'subscribe' && $token === $this->verifyToken) {
+        Log::info('Verifying webhook', [
+            'mode' => $mode,
+            'token_provided' => !empty($token),
+            'token_length' => strlen($token ?? ''),
+            'has_verify_token' => !empty($this->verifyToken),
+            'verify_token_length' => strlen($this->verifyToken ?? ''),
+            'tokens_match' => $token === $this->verifyToken
+        ]);
+
+        if ($mode !== 'subscribe') {
+            Log::warning('Webhook verification failed: Invalid mode', ['mode' => $mode]);
+            return false;
+        }
+
+        if (empty($this->verifyToken)) {
+            Log::error('Webhook verification failed: Verify token not configured');
+            return false;
+        }
+
+        if ($token === $this->verifyToken) {
+            Log::info('Webhook verification successful: Tokens match');
             return $challenge;
         }
+
+        Log::warning('Webhook verification failed: Token mismatch', [
+            'expected_length' => strlen($this->verifyToken),
+            'provided_length' => strlen($token ?? '')
+        ]);
 
         return false;
     }
@@ -942,6 +969,77 @@ class WhatsAppService
             Log::error('Sync pending messages exception', [
                 'message' => $e->getMessage(),
                 'user_id' => $userId,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Manually mark a message as delivered
+     * Useful when webhook isn't working but message was actually delivered
+     *
+     * @param string $messageId Message ID to mark as delivered
+     * @return array
+     */
+    public function markAsDelivered(string $messageId): array
+    {
+        try {
+            $message = Message::where('message_id', $messageId)->first();
+            
+            if (!$message) {
+                return [
+                    'success' => false,
+                    'error' => 'Message not found'
+                ];
+            }
+
+            if ($message->status === 'delivered' || $message->status === 'read') {
+                return [
+                    'success' => true,
+                    'message' => 'Message already marked as delivered',
+                    'data' => [
+                        'message_id' => $messageId,
+                        'status' => $message->status
+                    ]
+                ];
+            }
+
+            $updateData = [
+                'status' => 'delivered',
+                'delivered_at' => now()
+            ];
+
+            // If sent_at is not set, set it to created_at
+            if (!$message->sent_at) {
+                $updateData['sent_at'] = $message->created_at;
+            }
+
+            $message->update($updateData);
+
+            Log::info('Message manually marked as delivered', [
+                'message_id' => $messageId,
+                'user_id' => $message->user_id,
+                'phone_number' => $message->phone_number
+            ]);
+
+            return [
+                'success' => true,
+                'message' => 'Message marked as delivered',
+                'data' => [
+                    'message_id' => $messageId,
+                    'status' => 'delivered',
+                    'delivered_at' => $updateData['delivered_at']->toIso8601String()
+                ]
+            ];
+        } catch (\Exception $e) {
+            Log::error('Mark as delivered exception', [
+                'message' => $e->getMessage(),
+                'message_id' => $messageId,
                 'trace' => $e->getTraceAsString()
             ]);
 
