@@ -1,9 +1,15 @@
 @php
     $isAuthenticated = Auth::check();
+    $user = $user ?? (Auth::check() ? Auth::user() : null);
 @endphp
 
-@if($isAuthenticated)
+@if($isAuthenticated && isset($user))
     @extends('layouts.app')
+    
+    @section('title', 'Privacy Policy - WhatsApp')
+    @section('page-title', 'Privacy Policy')
+    
+    @section('content')
 @else
     <!DOCTYPE html>
     <html lang="en">
@@ -34,10 +40,6 @@
         <main class="min-h-screen">
 @endif
 
-@section('title', 'Privacy Policy - WhatsApp')
-@section('page-title', 'Privacy Policy')
-
-@section('content')
 <div class="p-6 max-w-4xl mx-auto">
     <div class="bg-white rounded-lg shadow-md p-8">
         <h1 class="text-3xl font-bold text-gray-900 mb-6">Privacy Policy</h1>
@@ -283,9 +285,10 @@
         </div>
     </div>
 </div>
-@endsection
 
-@if(!$isAuthenticated)
+@if($isAuthenticated && isset($user))
+    @endsection
+@else
         </main>
         <footer class="bg-white border-t border-gray-200 py-4">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-gray-600">

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class PageController extends Controller
 {
@@ -11,7 +12,8 @@ class PageController extends Controller
      */
     public function privacyPolicy()
     {
-        return view('pages.privacy-policy');
+        $user = Auth::check() ? Auth::user() : null;
+        return view('pages.privacy-policy', compact('user'));
     }
 }
 

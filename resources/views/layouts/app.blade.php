@@ -66,6 +66,7 @@
             </nav>
 
             <!-- User Section -->
+            @if(isset($user) && $user)
             <div class="border-t border-gray-200 p-4">
                 <div class="flex items-center space-x-3 mb-3">
                     <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-semibold">
@@ -90,6 +91,7 @@
                     </a>
                 </div>
             </div>
+            @endif
         </aside>
 
         <!-- Main Content -->
@@ -107,11 +109,11 @@
                         <i class="far fa-clock mr-1"></i>
                         <span id="current-time"></span>
                     </div>
-                    @if($user->hasWhatsAppCredentials())
+                    @if(isset($user) && $user && $user->hasWhatsAppCredentials())
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             <i class="fas fa-check-circle mr-1"></i>Connected
                         </span>
-                    @else
+                    @elseif(isset($user) && $user)
                         <a href="{{ route('settings') }}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 hover:bg-yellow-200">
                             <i class="fas fa-exclamation-triangle mr-1"></i>Setup Required
                         </a>
