@@ -78,6 +78,9 @@
                                         <a href="{{ route('whatsapp.webhook-diagnostics') }}" target="_blank" class="text-xs bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded">
                                             <i class="fas fa-stethoscope"></i> Webhook Diagnostics
                                         </a>
+                                        <a href="{{ route('whatsapp.check-delivery') }}" target="_blank" class="text-xs bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 rounded">
+                                            <i class="fas fa-truck"></i> Check Delivery
+                                        </a>
                                         <button onclick="syncPendingMessages()" class="text-xs bg-purple-500 hover:bg-purple-600 text-white px-2 py-1 rounded">
                                             <i class="fas fa-sync"></i> Sync Status
                                         </button>

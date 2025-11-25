@@ -377,6 +377,109 @@ class WhatsAppController extends Controller
     }
 
     /**
+     * Diagnostic endpoint to check message delivery status
+     * Shows recent sent messages and their delivery status
+     */
+    public function checkMessageDelivery(Request $request)
+    {
+        $user = Auth::user();
+        $limit = $request->query('limit', 20);
+        
+        // Get recent sent messages
+        $sentMessages = Message::where('user_id', $user->id)
+            ->where('direction', 'sent')
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get();
+        
+        // Count by status
+        $statusCounts = [
+            'sent' => Message::where('user_id', $user->id)->where('direction', 'sent')->where('status', 'sent')->whereNull('delivered_at')->count(),
+            'delivered' => Message::where('user_id', $user->id)->where('direction', 'sent')->where('status', 'delivered')->count(),
+            'read' => Message::where('user_id', $user->id)->where('direction', 'sent')->where('status', 'read')->count(),
+            'failed' => Message::where('user_id', $user->id)->where('direction', 'sent')->where('status', 'failed')->count(),
+        ];
+        
+        // Get pending messages (sent but not delivered)
+        $pendingMessages = Message::where('user_id', $user->id)
+            ->where('direction', 'sent')
+            ->where('status', 'sent')
+            ->whereNull('delivered_at')
+            ->whereNull('failed_at')
+            ->where('created_at', '>=', now()->subHours(24))
+            ->get();
+        
+        // Check webhook configuration
+        $webhookConfigured = !empty($user->whatsapp_verify_token);
+        
+        return response()->json([
+            'summary' => [
+                'total_sent' => $sentMessages->count(),
+                'status_counts' => $statusCounts,
+                'pending_delivery' => $pendingMessages->count(),
+                'pending_messages' => $pendingMessages->map(function($msg) {
+                    return [
+                        'id' => $msg->id,
+                        'message_id' => $msg->message_id,
+                        'phone_number' => $msg->phone_number,
+                        'content' => substr($msg->content ?? '', 0, 50),
+                        'sent_at' => $msg->sent_at,
+                        'created_at' => $msg->created_at,
+                        'hours_since_sent' => $msg->created_at->diffInHours(now())
+                    ];
+                })
+            ],
+            'recent_messages' => $sentMessages->map(function($msg) {
+                return [
+                    'id' => $msg->id,
+                    'message_id' => $msg->message_id,
+                    'phone_number' => $msg->phone_number,
+                    'content' => substr($msg->content ?? '', 0, 50),
+                    'status' => $msg->status,
+                    'sent_at' => $msg->sent_at?->toIso8601String(),
+                    'delivered_at' => $msg->delivered_at?->toIso8601String(),
+                    'read_at' => $msg->read_at?->toIso8601String(),
+                    'failed_at' => $msg->failed_at?->toIso8601String(),
+                    'error_message' => $msg->error_message,
+                    'created_at' => $msg->created_at->toIso8601String()
+                ];
+            }),
+            'webhook_configuration' => [
+                'webhook_url' => url('/whatsapp/webhook'),
+                'verify_token_set' => $webhookConfigured,
+                'phone_number_id' => $user->whatsapp_phone_number_id,
+                'has_credentials' => $user->hasWhatsAppCredentials()
+            ],
+            'troubleshooting' => [
+                '1' => 'Ensure webhook is verified in Meta Business Manager',
+                '2' => 'Subscribe to "message_status" field in webhook configuration (CRITICAL for delivery updates)',
+                '3' => 'Check logs at storage/logs/laravel.log for "Processing status updates from webhook" entries',
+                '4' => 'If messages show as "sent" but never "delivered", webhook may not be receiving status updates',
+                '5' => 'Messages may take 1-5 minutes to show as delivered',
+                '6' => 'Use "Sync Status" button on dashboard to check for updates',
+                '7' => 'If message has error_message, check the error for delivery failure reason'
+            ],
+            'common_issues' => [
+                'messages_stuck_on_sent' => [
+                    'symptom' => 'Messages show as "sent" but never update to "delivered"',
+                    'cause' => 'Webhook not subscribed to "message_status" field',
+                    'solution' => 'Go to Meta Business Manager → WhatsApp → Configuration → Webhooks → Subscribe to "message_status"'
+                ],
+                'no_status_updates' => [
+                    'symptom' => 'No status updates in logs',
+                    'cause' => 'Webhook not receiving status updates from Meta',
+                    'solution' => 'Verify webhook is active and "message_status" is subscribed'
+                ],
+                'messages_failing' => [
+                    'symptom' => 'Messages show as "failed"',
+                    'cause' => 'Recipient phone number invalid, not on WhatsApp, or blocked your number',
+                    'solution' => 'Check error_message field for specific reason'
+                ]
+            ]
+        ], 200);
+    }
+
+    /**
      * Check incoming messages for a specific phone number
      * Diagnostic endpoint to troubleshoot why messages aren't being received
      */

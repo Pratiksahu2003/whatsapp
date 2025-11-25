@@ -122,4 +122,5 @@ Route::middleware('auth')->group(function () {
     Route::get('/whatsapp/verify-diagnostics', [WhatsAppController::class, 'verifyDiagnostics'])->name('whatsapp.verify-diagnostics');
     Route::get('/whatsapp/webhook-diagnostics', [WhatsAppController::class, 'webhookDiagnostics'])->name('whatsapp.webhook-diagnostics');
     Route::get('/whatsapp/check-incoming', [WhatsAppController::class, 'checkIncomingMessages'])->name('whatsapp.check-incoming');
+    Route::get('/whatsapp/check-delivery', [WhatsAppController::class, 'checkMessageDelivery'])->name('whatsapp.check-delivery');
 });
