@@ -120,4 +120,6 @@ Route::prefix('whatsapp')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/whatsapp/test-webhook', [WhatsAppController::class, 'testWebhook'])->name('whatsapp.test-webhook');
     Route::get('/whatsapp/verify-diagnostics', [WhatsAppController::class, 'verifyDiagnostics'])->name('whatsapp.verify-diagnostics');
+    Route::get('/whatsapp/webhook-diagnostics', [WhatsAppController::class, 'webhookDiagnostics'])->name('whatsapp.webhook-diagnostics');
+    Route::get('/whatsapp/check-incoming', [WhatsAppController::class, 'checkIncomingMessages'])->name('whatsapp.check-incoming');
 });

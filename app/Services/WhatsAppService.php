@@ -94,13 +94,70 @@ class WhatsAppService
                 // Check for contacts information in response
                 $contacts = $responseData['contacts'] ?? [];
                 $contactStatus = $contacts[0]['wa_id'] ?? null;
+                $contactInput = $contacts[0]['input'] ?? null;
                 
-                Log::info('WhatsApp message sent successfully', [
+                // Log full response for debugging delivery issues
+                Log::info('WhatsApp message API response', [
                     'to' => $normalizedTo,
                     'message_id' => $messageId,
                     'contact_status' => $contactStatus,
+                    'contact_input' => $contactInput,
+                    'has_contacts' => !empty($contacts),
+                    'response_status' => $response->status(),
                     'full_response' => $responseData
                 ]);
+
+                // Check if message was actually accepted by WhatsApp
+                if (!$messageId) {
+                    Log::error('WhatsApp API returned success but no message_id - message may not be delivered', [
+                        'to' => $normalizedTo,
+                        'response' => $responseData,
+                        'has_contacts' => !empty($contacts)
+                    ]);
+                    
+                    // Save as failed since we can't track it
+                    $conversationId = $userId ? "{$userId}_{$normalizedTo}" : $normalizedTo;
+                    Message::create([
+                        'user_id' => $userId,
+                        'direction' => 'sent',
+                        'phone_number' => $normalizedTo,
+                        'conversation_id' => $conversationId,
+                        'message_type' => 'text',
+                        'content' => $message,
+                        'status' => 'failed',
+                        'error_message' => 'Message API call succeeded but no message_id returned. This usually means: 1) Recipient has not messaged you in the last 24 hours (use template message instead), 2) Phone number is invalid, or 3) Recipient does not have WhatsApp.',
+                        'metadata' => $responseData,
+                    ]);
+                    
+                    return [
+                        'success' => false,
+                        'error' => 'Message API call succeeded but no message_id was returned. This usually means the message cannot be delivered. Common reasons: 1) Recipient has not messaged you in the last 24 hours - you must use a template message for new contacts, 2) Phone number is invalid or not on WhatsApp, 3) Recipient has blocked your number. Please use a template message for contacts who haven\'t messaged you recently.',
+                        'error_code' => 'NO_MESSAGE_ID',
+                        'data' => $responseData,
+                        'help_text' => 'For new contacts or contacts who haven\'t messaged you in 24 hours, you must use Template Messages. Free-form messages only work within 24 hours of the recipient\'s last message to you.'
+                    ];
+                }
+
+                // Check if contact information is missing (indicates potential delivery issue)
+                $deliveryWarning = null;
+                if (empty($contacts)) {
+                    $deliveryWarning = 'Contact verification status unknown. If the recipient has not messaged you in the last 24 hours, the message may not be delivered. Use a template message for new contacts or contacts outside the 24-hour window.';
+                    Log::warning('Message sent but no contact information in response', [
+                        'to' => $normalizedTo,
+                        'message_id' => $messageId,
+                        'warning' => 'This may indicate the recipient is not in your contact list or outside 24-hour window'
+                    ]);
+                } else {
+                    // Check if contact input matches (phone number validation)
+                    if ($contactInput && $contactInput !== $normalizedTo) {
+                        $deliveryWarning = "Phone number format may be incorrect. Contact input: {$contactInput}, Sent to: {$normalizedTo}. Message may not be delivered.";
+                        Log::warning('Phone number mismatch in contact information', [
+                            'sent_to' => $normalizedTo,
+                            'contact_input' => $contactInput,
+                            'message_id' => $messageId
+                        ]);
+                    }
+                }
 
                 // Generate conversation ID
                 $conversationId = $userId ? "{$userId}_{$normalizedTo}" : $normalizedTo;
@@ -124,28 +181,18 @@ class WhatsAppService
                 Log::info('WhatsApp message saved to database', [
                     'message_id' => $messageId,
                     'to' => $normalizedTo,
-                    'status' => 'sent'
+                    'status' => 'sent',
+                    'has_delivery_warning' => !empty($deliveryWarning)
                 ]);
-
-                // Check if message was actually accepted by WhatsApp
-                if (!$messageId) {
-                    Log::warning('WhatsApp API returned success but no message_id', [
-                        'response' => $responseData
-                    ]);
-                    return [
-                        'success' => false,
-                        'error' => 'Message was sent but may not be delivered. Check if recipient has messaged you first (24-hour window) or use a template message for new contacts.',
-                        'error_code' => 'NO_MESSAGE_ID',
-                        'data' => $responseData
-                    ];
-                }
 
                 return [
                     'success' => true,
                     'message_id' => $messageId,
                     'contact_status' => $contactStatus,
+                    'contact_input' => $contactInput,
                     'data' => $responseData,
-                    'warning' => empty($contacts) ? 'Message sent but contact verification status unknown. If recipient hasn\'t messaged you in last 24 hours, use a template message instead.' : null
+                    'warning' => $deliveryWarning,
+                    'note' => empty($contacts) ? 'IMPORTANT: If the recipient has not messaged you in the last 24 hours, this message will NOT be delivered. You must use a Template Message for new contacts or contacts outside the 24-hour messaging window.' : null
                 ];
             }
 

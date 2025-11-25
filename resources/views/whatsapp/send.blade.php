@@ -60,6 +60,13 @@
                         <textarea name="message" rows="6" required placeholder="Enter your message here..." 
                             class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"></textarea>
                         <p class="text-xs text-gray-500 mt-1">Maximum 4096 characters</p>
+                        <div class="mt-2 rounded-md bg-yellow-50 border border-yellow-200 p-3">
+                            <p class="text-xs text-yellow-800">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                <strong>Important:</strong> Free-form messages only work if the recipient has messaged you in the last 24 hours. 
+                                For new contacts or contacts outside this window, use <strong>Template Messages</strong> instead.
+                            </p>
+                        </div>
                     </div>
 
                     <div class="flex items-center justify-end space-x-3">
@@ -326,15 +333,31 @@
                 const data = response.data;
                 
                 if (data.success) {
-                    // Show success with SweetAlert
+                    // Build message with warnings/notes if present
+                    let messageText = data.message || 'Message sent successfully!';
+                    let hasWarning = data.warning || data.note;
+                    
+                    if (hasWarning) {
+                        messageText += '\n\n⚠️ IMPORTANT:\n';
+                        if (data.warning) {
+                            messageText += data.warning + '\n';
+                        }
+                        if (data.note) {
+                            messageText += data.note + '\n';
+                        }
+                        messageText += '\n💡 Tip: For new contacts or contacts outside the 24-hour window, use Template Messages instead.';
+                    }
+                    
+                    // Show success with SweetAlert (warning icon if there's a warning)
                     Swal.fire({
-                        icon: 'success',
-                        title: 'Success!',
-                        text: data.message || 'Message sent successfully!',
-                        confirmButtonColor: '#22c55e',
+                        icon: hasWarning ? 'warning' : 'success',
+                        title: hasWarning ? 'Message Sent (Check Warning)' : 'Success!',
+                        text: messageText,
+                        confirmButtonColor: hasWarning ? '#f59e0b' : '#22c55e',
                         confirmButtonText: 'OK',
-                        timer: 2000,
-                        timerProgressBar: true
+                        timer: hasWarning ? 8000 : 2000,
+                        timerProgressBar: true,
+                        allowOutsideClick: true
                     }).then(() => {
                         form.reset();
                         clearValidationErrors(form);

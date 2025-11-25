@@ -14,6 +14,7 @@ class ExampleTest extends TestCase
     {
         $response = $this->get('/');
 
-        $response->assertStatus(200);
+        // Home page redirects to login if not authenticated
+        $response->assertStatus(302);
     }
 }

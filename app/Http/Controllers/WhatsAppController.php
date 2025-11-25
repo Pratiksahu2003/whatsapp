@@ -377,6 +377,61 @@ class WhatsAppController extends Controller
     }
 
     /**
+     * Check incoming messages for a specific phone number
+     * Diagnostic endpoint to troubleshoot why messages aren't being received
+     */
+    public function checkIncomingMessages(Request $request)
+    {
+        $user = Auth::user();
+        $phoneNumber = $request->query('phone', '918738871535');
+        
+        // Normalize phone number (remove non-digits)
+        $normalizedPhone = preg_replace('/[^0-9]/', '', $phoneNumber);
+        
+        // Get all received messages for this phone number
+        $receivedMessages = Message::where('phone_number', $normalizedPhone)
+            ->where('direction', 'received')
+            ->orderBy('created_at', 'desc')
+            ->limit(50)
+            ->get();
+        
+        // Check webhook configuration
+        $webhookConfigured = !empty($user->whatsapp_verify_token);
+        $webhookUrl = url('/whatsapp/webhook');
+        
+        return response()->json([
+            'phone_number' => $phoneNumber,
+            'normalized_phone' => $normalizedPhone,
+            'received_messages_count' => $receivedMessages->count(),
+            'received_messages' => $receivedMessages->map(function($msg) {
+                return [
+                    'id' => $msg->id,
+                    'message_id' => $msg->message_id,
+                    'content' => $msg->content,
+                    'type' => $msg->message_type,
+                    'created_at' => $msg->created_at,
+                    'user_id' => $msg->user_id
+                ];
+            }),
+            'webhook_configuration' => [
+                'webhook_url' => $webhookUrl,
+                'verify_token_set' => $webhookConfigured,
+                'phone_number_id' => $user->whatsapp_phone_number_id,
+                'has_credentials' => $user->hasWhatsAppCredentials()
+            ],
+            'troubleshooting' => [
+                '1' => 'Ensure webhook is verified in Meta Business Manager',
+                '2' => 'Subscribe to "messages" field in webhook configuration (CRITICAL)',
+                '3' => 'Check logs at storage/logs/laravel.log for "Webhook received" entries',
+                '4' => 'Verify phone number format matches exactly (no +, no spaces)',
+                '5' => 'Send a test message FROM phone 918738871535 TO your WhatsApp Business number',
+                '6' => 'Check if webhook URL is publicly accessible: ' . $webhookUrl,
+                '7' => 'Phone number in webhook will be normalized to: ' . $normalizedPhone
+            ]
+        ], 200);
+    }
+
+    /**
      * Send a text message
      */
     public function sendMessage(Request $request)
